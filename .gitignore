@@ -225,3 +225,7 @@ data/output/
 spark-warehouse/
 metastore_db/
 derby.log
+
+data/sample/*.csv
+data/sample/*.json
+data/output/
