@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.env
+credentials*.json
+data/output/
+spark-warehouse/
+metastore_db/
+derby.log
