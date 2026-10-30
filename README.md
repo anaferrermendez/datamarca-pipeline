@@ -16,8 +16,8 @@ Unidad: 3 — Implementación de pipeline batch o streaming con Spark en entorno
 | Generador de dataset sintético reproducible |  Completado |
 | Reglas de calidad y configuración del pipeline |  Completado |
 | Ingesta con validaciones |  Completado |
-| Transformaciones (SparkSQL / DataFrames) |  Pendiente |
-| Persistencia en Parquet particionado |  Pendiente |
+| Transformaciones (SparkSQL / DataFrames) |  Completado |
+| Persistencia en Parquet particionado |  Completado |
 | Pruebas de rendimiento y estimación de costos |  Pendiente |
 | Informe técnico |  Pendiente |
 
@@ -314,4 +314,63 @@ python -m src.ingestion
 
 El comando termina con código 0 si la corrida es exitosa y 1 si se detuvo por calidad.
 Los logs muestran el inicio y fin de cada etapa con su duración.
+
+## Transformaciones
+
+Parten de los datos validados por la ingesta y producen tablas de negocio en
+`data/output/curated/`.
+
+### Pipeline completo en un comando
+
+```bash
+python data/generate_sample.py --rows 5000 --seed 134340
+python -m src.pipeline
+```
+
+`src.pipeline` ejecuta la ingesta y, si es exitosa, las transformaciones, con una sola
+`SparkSession`. Los tiempos de todas las etapas quedan en `reports/pipeline_metricas.json`.
+Cada fase también se puede ejecutar por separado con `python -m src.ingestion` y
+`python -m src.transformations`.
+
+### Flujo
+
+1. **Lectura** de los Parquet validados, seleccionando solo las columnas necesarias.
+2. **Enriquecimiento** de cada venta con:
+   - `line_total` = `quantity` × `unit_price` (Decimal);
+   - ciudad y país de la tienda, y nombre de la categoría del producto, mediante
+     *broadcast joins* con dimensiones definidas en `config/pipeline.json`;
+   - canal: `ecommerce` si la venta tiene al menos un evento de e-commerce,
+     `tienda_fisica` si no (supuesto del caso: el POS no genera logs).
+3. **Agregaciones** y escritura en Parquet.
+4. **Conciliación**: la suma de ingresos agregados debe ser igual a la del detalle; si no,
+   la corrida falla.
+5. **Planes de Catalyst** guardados en `reports/plan_catalyst.txt` como evidencia.
+
+### Tablas generadas
+
+| Tabla | API | Particionado | Contenido |
+|---|---|---|---|
+| `ventas_tienda_mes` | DataFrames | `year`, `month` | Transacciones, unidades, ingresos y ticket promedio por tienda |
+| `ventas_categoria_pais` | SparkSQL | `year`, `month` | Unidades, ingresos y participación de cada categoría dentro del país |
+| `ventas_canal` | DataFrames | `year`, `month` | Transacciones, ingresos y participación de tienda física vs. e-commerce |
+| `embudo_conversion` | SparkSQL | — (3 filas) | Vistas, carritos, compras y tasas de conversión por dispositivo |
+
+Se usan las dos APIs a propósito: ambas pasan por el mismo optimizador Catalyst y
+generan planes equivalentes.
+
+### Optimizaciones verificables en `reports/plan_catalyst.txt`
+
+| Optimización | Dónde se ve en el plan | Efecto |
+|---|---|---|
+| Partition pruning | `PartitionFilters: [(year = 2026), (month = 1)]` | Solo se abre la carpeta del mes consultado |
+| Column pruning | `ReadSchema: struct<store_id, unit_price>` | Solo se leen las columnas usadas |
+| Broadcast join | `BroadcastHashJoin` | Las dimensiones se copian a cada trabajador; la tabla de ventas no se mueve |
+| Caché | `InMemoryRelation` | Las ventas enriquecidas se calculan una vez para tres agregaciones |
+
+### Limitación conocida del dataset sintético
+
+El generador asigna `event_type` al azar e independiente para cada evento, por lo que
+el embudo no refleja un recorrido real del cliente: las tasas rondan el 100 % y pueden
+superarlo. Con datos reales (secuencias de eventos por sesión), la misma consulta
+mostraría la caída típica de vista → carrito → compra.
 

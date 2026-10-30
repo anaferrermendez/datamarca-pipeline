@@ -1,0 +1,305 @@
+=== 1. Consulta de enero 2026: partition pruning + column pruning ===
+
+== Physical Plan ==
+* Project (3)
++- * ColumnarToRow (2)
+   +- Scan parquet  (1)
+
+
+(1) Scan parquet 
+Output [4]: [store_id#4291, unit_price#4294, year#4298, month#4299]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/serch/Downloads/datamarca-pipeline/data/output/validated/transacciones]
+PartitionFilters: [isnotnull(year#4298), isnotnull(month#4299), (year#4298 = 2026), (month#4299 = 1)]
+ReadSchema: struct<store_id:string,unit_price:decimal(12,2)>
+
+(2) ColumnarToRow [codegen id : 1]
+Input [4]: [store_id#4291, unit_price#4294, year#4298, month#4299]
+
+(3) Project [codegen id : 1]
+Output [2]: [store_id#4291, unit_price#4294]
+Input [4]: [store_id#4291, unit_price#4294, year#4298, month#4299]
+
+
+
+
+=== 2. Enriquecimiento de ventas: broadcast joins ===
+
+== Physical Plan ==
+AdaptiveSparkPlan (48)
++- InMemoryTableScan (1)
+      +- InMemoryRelation (2)
+            +- AdaptiveSparkPlan (47)
+               +- == Final Plan ==
+                  ResultQueryStage (31)
+                  +- * Project (30)
+                     +- * BroadcastHashJoin LeftOuter BuildRight (29)
+                        :- * Project (17)
+                        :  +- * BroadcastHashJoin LeftOuter BuildRight (16)
+                        :     :- * Project (11)
+                        :     :  +- * BroadcastHashJoin LeftOuter BuildRight (10)
+                        :     :     :- * Project (5)
+                        :     :     :  +- * ColumnarToRow (4)
+                        :     :     :     +- Scan parquet  (3)
+                        :     :     +- BroadcastQueryStage (9), Statistics(sizeInBytes=2.0 MiB, rowCount=9)
+                        :     :        +- BroadcastExchange (8)
+                        :     :           +- * Filter (7)
+                        :     :              +- * Scan ExistingRDD (6)
+                        :     +- BroadcastQueryStage (15), Statistics(sizeInBytes=2.0 MiB, rowCount=5)
+                        :        +- BroadcastExchange (14)
+                        :           +- * Filter (13)
+                        :              +- * Scan ExistingRDD (12)
+                        +- BroadcastQueryStage (28), Statistics(sizeInBytes=2.1 MiB, rowCount=3.80E+3)
+                           +- BroadcastExchange (27)
+                              +- * HashAggregate (26)
+                                 +- AQEShuffleRead (25), coalesced
+                                    +- ShuffleQueryStage (24), Statistics(sizeInBytes=118.6 KiB, rowCount=3.80E+3)
+                                       +- Exchange (23)
+                                          +- * HashAggregate (22)
+                                             +- * Project (21)
+                                                +- * Filter (20)
+                                                   +- * ColumnarToRow (19)
+                                                      +- Scan parquet  (18)
+               +- == Initial Plan ==
+                  Project (46)
+                  +- BroadcastHashJoin LeftOuter BuildRight (45)
+                     :- Project (38)
+                     :  +- BroadcastHashJoin LeftOuter BuildRight (37)
+                     :     :- Project (35)
+                     :     :  +- BroadcastHashJoin LeftOuter BuildRight (34)
+                     :     :     :- Project (32)
+                     :     :     :  +- Scan parquet  (3)
+                     :     :     +- BroadcastExchange (33)
+                     :     :        +- Filter (7)
+                     :     :           +- Scan ExistingRDD (6)
+                     :     +- BroadcastExchange (36)
+                     :        +- Filter (13)
+                     :           +- Scan ExistingRDD (12)
+                     +- BroadcastExchange (44)
+                        +- HashAggregate (43)
+                           +- Exchange (42)
+                              +- HashAggregate (41)
+                                 +- Project (40)
+                                    +- Filter (39)
+                                       +- Scan parquet  (18)
+
+
+(1) InMemoryTableScan
+Output [13]: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, channel#2300]
+Arguments: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, channel#2300]
+
+(2) InMemoryRelation
+Arguments: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, channel#2300], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(3) Scan parquet 
+Output [8]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/serch/Downloads/datamarca-pipeline/data/output/validated/transacciones]
+ReadSchema: struct<transaction_id:string,timestamp:timestamp,store_id:string,product_id:string,quantity:int,unit_price:decimal(12,2)>
+
+(4) ColumnarToRow [codegen id : 5]
+Input [8]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281]
+
+(5) Project [codegen id : 5]
+Output [10]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, cast((cast(quantity#2275 as decimal(10,0)) * unit_price#2276) as decimal(18,2)) AS line_total#2298, substring_index(product_id#2274, -, 1) AS category_code#2299]
+Input [8]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281]
+
+(6) Scan ExistingRDD [codegen id : 1]
+Output [3]: [store_id#2292, city#2293, country#2294]
+Arguments: [store_id#2292, city#2293, country#2294], MapPartitionsRDD[102] at applySchemaToPythonRDD at NativeMethodAccessorImpl.java:0, ExistingRDD, UnknownPartitioning(0)
+
+(7) Filter [codegen id : 1]
+Input [3]: [store_id#2292, city#2293, country#2294]
+Condition : isnotnull(store_id#2292)
+
+(8) BroadcastExchange
+Input [3]: [store_id#2292, city#2293, country#2294]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, false]),false), [plan_id=1024]
+
+(9) BroadcastQueryStage
+Output [3]: [store_id#2292, city#2293, country#2294]
+Arguments: 0
+
+(10) BroadcastHashJoin [codegen id : 5]
+Left keys [1]: [store_id#2273]
+Right keys [1]: [store_id#2292]
+Join type: LeftOuter
+Join condition: None
+
+(11) Project [codegen id : 5]
+Output [12]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, category_code#2299, city#2293, country#2294]
+Input [13]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, category_code#2299, store_id#2292, city#2293, country#2294]
+
+(12) Scan ExistingRDD [codegen id : 2]
+Output [2]: [category_code#2295, category#2296]
+Arguments: [category_code#2295, category#2296], MapPartitionsRDD[107] at applySchemaToPythonRDD at NativeMethodAccessorImpl.java:0, ExistingRDD, UnknownPartitioning(0)
+
+(13) Filter [codegen id : 2]
+Input [2]: [category_code#2295, category#2296]
+Condition : isnotnull(category_code#2295)
+
+(14) BroadcastExchange
+Input [2]: [category_code#2295, category#2296]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, false]),false), [plan_id=1036]
+
+(15) BroadcastQueryStage
+Output [2]: [category_code#2295, category#2296]
+Arguments: 1
+
+(16) BroadcastHashJoin [codegen id : 5]
+Left keys [1]: [category_code#2299]
+Right keys [1]: [category_code#2295]
+Join type: LeftOuter
+Join condition: None
+
+(17) Project [codegen id : 5]
+Output [12]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296]
+Input [14]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, category_code#2299, city#2293, country#2294, category_code#2295, category#2296]
+
+(18) Scan parquet 
+Output [2]: [transaction_id#2283, event_type#2290]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/serch/Downloads/datamarca-pipeline/data/output/validated/logs]
+PushedFilters: [IsNotNull(transaction_id)]
+ReadSchema: struct<transaction_id:string>
+
+(19) ColumnarToRow [codegen id : 3]
+Input [2]: [transaction_id#2283, event_type#2290]
+
+(20) Filter [codegen id : 3]
+Input [2]: [transaction_id#2283, event_type#2290]
+Condition : isnotnull(transaction_id#2283)
+
+(21) Project [codegen id : 3]
+Output [1]: [transaction_id#2283]
+Input [2]: [transaction_id#2283, event_type#2290]
+
+(22) HashAggregate [codegen id : 3]
+Input [1]: [transaction_id#2283]
+Keys [1]: [transaction_id#2283]
+Functions: []
+Aggregate Attributes: []
+Results [1]: [transaction_id#2283]
+
+(23) Exchange
+Input [1]: [transaction_id#2283]
+Arguments: hashpartitioning(transaction_id#2283, 8), ENSURE_REQUIREMENTS, [plan_id=1065]
+
+(24) ShuffleQueryStage
+Output [1]: [transaction_id#2283]
+Arguments: 2
+
+(25) AQEShuffleRead
+Input [1]: [transaction_id#2283]
+Arguments: coalesced
+
+(26) HashAggregate [codegen id : 4]
+Input [1]: [transaction_id#2283]
+Keys [1]: [transaction_id#2283]
+Functions: []
+Aggregate Attributes: []
+Results [2]: [transaction_id#2283, true AS _has_log#2297]
+
+(27) BroadcastExchange
+Input [2]: [transaction_id#2283, _has_log#2297]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true]),false), [plan_id=1151]
+
+(28) BroadcastQueryStage
+Output [2]: [transaction_id#2283, _has_log#2297]
+Arguments: 3
+
+(29) BroadcastHashJoin [codegen id : 5]
+Left keys [1]: [transaction_id#2271]
+Right keys [1]: [transaction_id#2283]
+Join type: LeftOuter
+Join condition: None
+
+(30) Project [codegen id : 5]
+Output [13]: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, CASE WHEN _has_log#2297 THEN ecommerce ELSE tienda_fisica END AS channel#2300]
+Input [14]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, transaction_id#2283, _has_log#2297]
+
+(31) ResultQueryStage
+Output [13]: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, channel#2300]
+Arguments: 4
+
+(32) Project
+Output [10]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, cast((cast(quantity#2275 as decimal(10,0)) * unit_price#2276) as decimal(18,2)) AS line_total#2298, substring_index(product_id#2274, -, 1) AS category_code#2299]
+Input [8]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281]
+
+(33) BroadcastExchange
+Input [3]: [store_id#2292, city#2293, country#2294]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, false]),false), [plan_id=984]
+
+(34) BroadcastHashJoin
+Left keys [1]: [store_id#2273]
+Right keys [1]: [store_id#2292]
+Join type: LeftOuter
+Join condition: None
+
+(35) Project
+Output [12]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, category_code#2299, city#2293, country#2294]
+Input [13]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, category_code#2299, store_id#2292, city#2293, country#2294]
+
+(36) BroadcastExchange
+Input [2]: [category_code#2295, category#2296]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, false]),false), [plan_id=988]
+
+(37) BroadcastHashJoin
+Left keys [1]: [category_code#2299]
+Right keys [1]: [category_code#2295]
+Join type: LeftOuter
+Join condition: None
+
+(38) Project
+Output [12]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296]
+Input [14]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, category_code#2299, city#2293, country#2294, category_code#2295, category#2296]
+
+(39) Filter
+Input [2]: [transaction_id#2283, event_type#2290]
+Condition : isnotnull(transaction_id#2283)
+
+(40) Project
+Output [1]: [transaction_id#2283]
+Input [2]: [transaction_id#2283, event_type#2290]
+
+(41) HashAggregate
+Input [1]: [transaction_id#2283]
+Keys [1]: [transaction_id#2283]
+Functions: []
+Aggregate Attributes: []
+Results [1]: [transaction_id#2283]
+
+(42) Exchange
+Input [1]: [transaction_id#2283]
+Arguments: hashpartitioning(transaction_id#2283, 8), ENSURE_REQUIREMENTS, [plan_id=991]
+
+(43) HashAggregate
+Input [1]: [transaction_id#2283]
+Keys [1]: [transaction_id#2283]
+Functions: []
+Aggregate Attributes: []
+Results [2]: [transaction_id#2283, true AS _has_log#2297]
+
+(44) BroadcastExchange
+Input [2]: [transaction_id#2283, _has_log#2297]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true]),false), [plan_id=994]
+
+(45) BroadcastHashJoin
+Left keys [1]: [transaction_id#2271]
+Right keys [1]: [transaction_id#2283]
+Join type: LeftOuter
+Join condition: None
+
+(46) Project
+Output [13]: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, CASE WHEN _has_log#2297 THEN ecommerce ELSE tienda_fisica END AS channel#2300]
+Input [14]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, transaction_id#2283, _has_log#2297]
+
+(47) AdaptiveSparkPlan
+Output [13]: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, channel#2300]
+Arguments: isFinalPlan=true
+
+(48) AdaptiveSparkPlan
+Output [13]: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281, line_total#2298, city#2293, country#2294, category#2296, channel#2300]
+Arguments: isFinalPlan=false
+
+

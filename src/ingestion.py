@@ -60,16 +60,20 @@ class IngestionResult:
 
 
 @contextmanager
-def timed(result: IngestionResult, stage: str):
-    """Mide el tiempo de una etapa y lo registra en el log y en el resultado."""
-    logger.info("Inicio etapa: %s", stage)
+def timed(result, stage: str, log: logging.Logger | None = None):
+    """Mide el tiempo de una etapa y lo registra en el log y en result.timings.
+
+    Lo usan la ingesta y las transformaciones; cada una pasa su propio logger.
+    """
+    log = log or logger
+    log.info("Inicio etapa: %s", stage)
     start = time.perf_counter()
     try:
         yield
     finally:
         elapsed = round(time.perf_counter() - start, 3)
         result.timings[stage] = elapsed
-        logger.info("Fin etapa: %s (%.3f s)", stage, elapsed)
+        log.info("Fin etapa: %s (%.3f s)", stage, elapsed)
 
 
 # ---------------------------------------------------------------------------
