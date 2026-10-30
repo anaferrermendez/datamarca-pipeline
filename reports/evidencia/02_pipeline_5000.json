@@ -1,6 +1,6 @@
 {
   "spark_master": "local[*]",
-  "input_dir": "/Users/serch/Downloads/datamarca-pipeline/data/sample",
+  "input_dir": "<RAIZ_DEL_REPO>/data/sample",
   "ingesta": {
     "run_id": "20261030-132407-5320c2",
     "estado": "exitosa",

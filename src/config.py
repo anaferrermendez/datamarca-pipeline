@@ -12,6 +12,13 @@ Variables de entorno soportadas:
   DATAMARCA_OUTPUT_DIR          Carpeta donde se escriben los resultados
   DATAMARCA_SPARK_MASTER        Master de Spark (local[*], yarn, ...)
   DATAMARCA_SHUFFLE_PARTITIONS  Número de particiones de shuffle
+  DATAMARCA_REPORTS_DIR         Carpeta LOCAL donde se escriben métricas y planes
+                                (en cloud, /tmp/...; luego se publican en el bucket)
+  DATAMARCA_REPORTS_URI         Destino (gs://, s3a://, ...) al que se copian los reportes
+                                al terminar la corrida (opcional)
+
+  DATAMARCA_SPARK_MASTER=auto   No fija el master: lo define el servicio cloud
+                                (Dataproc / EMR Serverless) al enviar el trabajo.
 """
 
 import json
@@ -102,7 +109,7 @@ def load_config(config_path: str | None = None) -> PipelineConfig:
         validated_subdir=paths["validated_subdir"],
         quarantine_subdir=paths["quarantine_subdir"],
         curated_subdir=paths["curated_subdir"],
-        reports_dir=_resolve_path(paths["reports_dir"]),
+        reports_dir=_resolve_path(os.getenv("DATAMARCA_REPORTS_DIR", paths["reports_dir"])),
         store_ids=tuple(catalogs["store_ids"]),
         product_ids=tuple(catalogs["product_ids"]),
         event_types=tuple(catalogs["event_types"]),
@@ -130,9 +137,13 @@ def create_spark_session(config: PipelineConfig):
     os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
     os.environ.setdefault("PYSPARK_DRIVER_PYTHON", sys.executable)
 
+    builder = SparkSession.builder.appName(config.app_name)
+    if config.spark_master.lower() not in ("", "auto"):
+        # En cloud se usa "auto": el servicio gestionado ya define el master del cluster
+        builder = builder.master(config.spark_master)
+
     spark = (
-        SparkSession.builder.appName(config.app_name)
-        .master(config.spark_master)
+        builder
         .config("spark.sql.shuffle.partitions", config.shuffle_partitions)
         .config("spark.sql.session.timeZone", config.timezone)
         # Adaptive Query Execution: Catalyst reoptimiza el plan en tiempo de ejecución
