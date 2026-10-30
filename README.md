@@ -20,6 +20,9 @@ Unidad: 3 — Implementación de pipeline batch o streaming con Spark en entorno
 | Persistencia en Parquet particionado |  Completado |
 | Pruebas de rendimiento y estimación de costos |  Completado |
 | Informe técnico |  Completado (`docs/informe_tecnico.md`) |
+| Experimento de optimización (con y sin cada mejora)     | Completado |
+| Código y scripts para Google Cloud (serverless)         | Completado (probado en local) |
+| Corrida real en Google Cloud con evidencia              | Pendiente (ver `docs/despliegue_gcp.md`) |
 
 ## Requisitos del entorno
 
@@ -79,7 +82,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 ```bash
 # 1. Clonar el repositorio
-git clone <URL_DEL_REPO>
+git clone https://github.com/anaferrermendez/datamarca-pipeline.git
 cd datamarca-pipeline
 
 # 2. Crear y activar entorno virtual
@@ -387,16 +390,47 @@ Para cada volumen genera el dataset con semilla fija, ejecuta `python -m src.pip
 `(tiempo + arranque del cluster) x nodos x tarifa por nodo-hora`; la tarifa es un **supuesto** configurable y debe
 verificarse con la calculadora del proveedor. Resultados y análisis en `docs/informe_tecnico.md`.
 
-## Ejecución en cloud (supuestos)
+## Experimento de optimización
 
-El código no cambia entre local y cloud; solo las variables de entorno:
+```
+python -m src.pipeline                                  # genera los datos validados
+python -m src.experimento_optimizacion --repeticiones 3
+```
 
-| Variable | Ejemplo |
-|---|---|
-| `DATAMARCA_INPUT_DIR` | `s3a://<bucket>/datamarca/raw` |
-| `DATAMARCA_OUTPUT_DIR` | `s3a://<bucket>/datamarca/out` |
-| `DATAMARCA_SPARK_MASTER` | `yarn` |
-| `DATAMARCA_SHUFFLE_PARTITIONS` | `200` |
+Compara cada optimización contra su alternativa ingenua (broadcast join, caché, partition pruning, column pruning y
+función nativa frente a UDF) y guarda `reports/experimento_optimizacion.md`. Resultados e interpretación en el informe.
 
-Credenciales: rol de IAM del cluster (EMR/Dataproc/HDInsight); nunca se guardan claves en el repositorio.
-Requiere el conector de almacenamiento correspondiente (`hadoop-aws` para `s3a://`).
+## Ejecución en la nube (Google Cloud)
+
+El código es el mismo en local y en cloud; cambian los parámetros de entrada. Para Google Cloud (Managed Service for
+Apache Spark, modo serverless, con datos en Cloud Storage) está todo automatizado:
+
+```bash
+export PROJECT_ID=<id-del-proyecto> BUCKET=<bucket-unico>
+ROWS=500000 bash scripts/gcp_ejecutar.sh      # una corrida completa
+bash scripts/gcp_benchmark.sh                  # varios volúmenes y número de executors
+python3 scripts/gcp_resumen.py              # tiempos, DCU-horas y costo
+```
+
+Guía completa, comparación de proveedores y evidencia a recolectar: [`docs/despliegue_gcp.md`](docs/despliegue_gcp.md).
+
+| Variable | Ejemplo | Quién la define |
+|---|---|---|
+| `DATAMARCA_INPUT_DIR` | `gs://<bucket>/raw/500000` | `cloud_entry.py` (`--input-dir`) |
+| `DATAMARCA_OUTPUT_DIR` | `gs://<bucket>/out/<batch>` | `cloud_entry.py` (`--output-dir`) |
+| `DATAMARCA_REPORTS_URI` | `gs://<bucket>/reportes/<batch>` | `cloud_entry.py` (`--reports-uri`) |
+| `DATAMARCA_REPORTS_DIR` | carpeta local temporal del driver | `cloud_entry.py` |
+| `DATAMARCA_SPARK_MASTER` | `auto` (lo define el servicio) | `cloud_entry.py` |
+| `DATAMARCA_SHUFFLE_PARTITIONS` | `64` | `cloud_entry.py` (`--shuffle-partitions`) |
+
+Credenciales: se usan la cuenta de Google Cloud de quien ejecuta (Cloud Shell) y la cuenta de servicio del proyecto.
+No hay claves ni tokens en el repositorio. Para AWS (EMR Serverless) basta apuntar a `s3a://` con un rol de IAM.
+
+## Flujo de trabajo en Git
+
+- `main` solo recibe cambios mediante Pull Request.
+- Una rama por tarea: `feat/<tema>`, `fix/<tema>` o `docs/<tema>`.
+- Commits semánticos: `feat`, `fix`, `test`, `docs`, `refactor`, `chore`, con alcance opcional, por ejemplo
+  `feat(ingesta): agregar cuarentena`.
+- Antes de abrir el PR: `python -m pytest` debe pasar.
+- Quien no tenga permisos de escritura trabaja desde un fork y abre el PR hacia este repositorio.

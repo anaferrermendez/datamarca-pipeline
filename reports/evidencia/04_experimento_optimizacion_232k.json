@@ -1,0 +1,91 @@
+{
+  "filas_validadas": 232464,
+  "spark_master": "local[*]",
+  "resultados": [
+    {
+      "experimento": "broadcast_join",
+      "descripcion": "Joins con dimensiones pequeñas: BroadcastHashJoin vs. SortMergeJoin",
+      "optimizado": {
+        "mediana_s": 1.155,
+        "min_s": 0.969,
+        "max_s": 1.424,
+        "repeticiones": 3
+      },
+      "ingenuo": {
+        "mediana_s": 1.959,
+        "min_s": 1.608,
+        "max_s": 2.344,
+        "repeticiones": 3
+      },
+      "mejora_x": 1.7
+    },
+    {
+      "experimento": "cache",
+      "descripcion": "Ventas enriquecidas reutilizadas por 3 agregaciones: con .cache() vs. recalcular",
+      "optimizado": {
+        "mediana_s": 4.26,
+        "min_s": 3.827,
+        "max_s": 5.137,
+        "repeticiones": 3
+      },
+      "ingenuo": {
+        "mediana_s": 3.421,
+        "min_s": 3.411,
+        "max_s": 3.949,
+        "repeticiones": 3
+      },
+      "mejora_x": 0.8
+    },
+    {
+      "experimento": "partition_pruning",
+      "descripcion": "Filtro sobre columnas de partición (year/month) vs. sobre función de timestamp",
+      "optimizado": {
+        "mediana_s": 0.19,
+        "min_s": 0.178,
+        "max_s": 0.197,
+        "repeticiones": 3
+      },
+      "ingenuo": {
+        "mediana_s": 0.32,
+        "min_s": 0.258,
+        "max_s": 0.335,
+        "repeticiones": 3
+      },
+      "mejora_x": 1.68
+    },
+    {
+      "experimento": "column_pruning",
+      "descripcion": "Leer solo las columnas necesarias vs. tocar todas las columnas",
+      "optimizado": {
+        "mediana_s": 0.24,
+        "min_s": 0.204,
+        "max_s": 0.287,
+        "repeticiones": 3
+      },
+      "ingenuo": {
+        "mediana_s": 0.516,
+        "min_s": 0.493,
+        "max_s": 0.758,
+        "repeticiones": 3
+      },
+      "mejora_x": 2.15
+    },
+    {
+      "experimento": "nativo_vs_udf",
+      "descripcion": "Función nativa de Spark vs. UDF de Python (el optimizador no ve dentro de la UDF)",
+      "optimizado": {
+        "mediana_s": 0.19,
+        "min_s": 0.147,
+        "max_s": 0.224,
+        "repeticiones": 3
+      },
+      "ingenuo": {
+        "mediana_s": 0.603,
+        "min_s": 0.602,
+        "max_s": 0.805,
+        "repeticiones": 3
+      },
+      "mejora_x": 3.17
+    }
+  ]
+}

@@ -11,10 +11,10 @@
     "total": 3.59
   },
   "salidas": {
-    "cuarentena_transacciones": "/Users/serch/Downloads/datamarca-pipeline/data/output/quarantine/transacciones",
-    "cuarentena_logs": "/Users/serch/Downloads/datamarca-pipeline/data/output/quarantine/logs",
-    "validos_transacciones": "/Users/serch/Downloads/datamarca-pipeline/data/output/validated/transacciones",
-    "validos_logs": "/Users/serch/Downloads/datamarca-pipeline/data/output/validated/logs"
+    "cuarentena_transacciones": "<RAIZ_DEL_REPO>/data/output/quarantine/transacciones",
+    "cuarentena_logs": "<RAIZ_DEL_REPO>/data/output/quarantine/logs",
+    "validos_transacciones": "<RAIZ_DEL_REPO>/data/output/validated/transacciones",
+    "validos_logs": "<RAIZ_DEL_REPO>/data/output/validated/logs"
   },
   "calidad": {
     "transacciones": {

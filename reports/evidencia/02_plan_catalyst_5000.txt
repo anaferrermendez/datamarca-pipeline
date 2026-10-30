@@ -9,7 +9,7 @@
 (1) Scan parquet 
 Output [4]: [store_id#4291, unit_price#4294, year#4298, month#4299]
 Batched: true
-Location: InMemoryFileIndex [file:/Users/serch/Downloads/datamarca-pipeline/data/output/validated/transacciones]
+Location: InMemoryFileIndex [file:<RAIZ_DEL_REPO>/data/output/validated/transacciones]
 PartitionFilters: [isnotnull(year#4298), isnotnull(month#4299), (year#4298 = 2026), (month#4299 = 1)]
 ReadSchema: struct<store_id:string,unit_price:decimal(12,2)>
 
@@ -94,7 +94,7 @@ Arguments: [transaction_id#2271, store_id#2273, timestamp#2272, product_id#2274,
 (3) Scan parquet 
 Output [8]: [transaction_id#2271, timestamp#2272, store_id#2273, product_id#2274, quantity#2275, unit_price#2276, year#2280, month#2281]
 Batched: true
-Location: InMemoryFileIndex [file:/Users/serch/Downloads/datamarca-pipeline/data/output/validated/transacciones]
+Location: InMemoryFileIndex [file:<RAIZ_DEL_REPO>/data/output/validated/transacciones]
 ReadSchema: struct<transaction_id:string,timestamp:timestamp,store_id:string,product_id:string,quantity:int,unit_price:decimal(12,2)>
 
 (4) ColumnarToRow [codegen id : 5]
@@ -159,7 +159,7 @@ Input [14]: [store_id#2273, transaction_id#2271, timestamp#2272, product_id#2274
 (18) Scan parquet 
 Output [2]: [transaction_id#2283, event_type#2290]
 Batched: true
-Location: InMemoryFileIndex [file:/Users/serch/Downloads/datamarca-pipeline/data/output/validated/logs]
+Location: InMemoryFileIndex [file:<RAIZ_DEL_REPO>/data/output/validated/logs]
 PushedFilters: [IsNotNull(transaction_id)]
 ReadSchema: struct<transaction_id:string>
 
