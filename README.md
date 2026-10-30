@@ -14,8 +14,8 @@ Unidad: 3 — Implementación de pipeline batch o streaming con Spark en entorno
 |---|---|
 | Configuración del entorno (Java 17 + PySpark + `.venv`) | Completado |
 | Generador de dataset sintético reproducible |  Completado |
-| Reglas de calidad y configuración del pipeline |  En progreso |
-| Ingesta con validaciones |  Pendiente |
+| Reglas de calidad y configuración del pipeline |  Completado |
+| Ingesta con validaciones |  Completado |
 | Transformaciones (SparkSQL / DataFrames) |  Pendiente |
 | Persistencia en Parquet particionado |  Pendiente |
 | Pruebas de rendimiento y estimación de costos |  Pendiente |
@@ -36,6 +36,44 @@ Unidad: 3 — Implementación de pipeline batch o streaming con Spark en entorno
 | `JAVA_HOME` | Ruta a JDK 17 (ej. `C:\Program Files\Java\jdk-17`) | Spark requiere JVM |
 | `PYSPARK_PYTHON` | Ruta al Python del `.venv` | Fuerza a Spark a usar el intérprete del entorno virtual |
 | `PYSPARK_DRIVER_PYTHON` | Igual que `PYSPARK_PYTHON` | Evita que Spark use el alias falso de Python de Microsoft Store |
+
+`src/config.py` asigna automáticamente `PYSPARK_PYTHON` y `PYSPARK_DRIVER_PYTHON` al
+Python del `.venv` activo si no están definidas.
+
+### Variables de entorno opcionales del pipeline
+
+Sobrescriben los valores de `config/pipeline.json` sin modificar código (por ejemplo,
+para apuntar al almacenamiento cloud). Ninguna contiene credenciales.
+
+| Variable | Default | Propósito |
+|---|---|---|
+| `DATAMARCA_CONFIG` | `config/pipeline.json` | Ruta a un archivo de configuración alternativo |
+| `DATAMARCA_INPUT_DIR` | `data/sample` | Carpeta de entrada (local o `s3a://`, `gs://`, `abfss://`) |
+| `DATAMARCA_OUTPUT_DIR` | `data/output` | Carpeta de salida |
+| `DATAMARCA_SPARK_MASTER` | `local[*]` | Master de Spark |
+| `DATAMARCA_SHUFFLE_PARTITIONS` | `8` | Particiones de shuffle (subir en cluster) |
+
+### Windows: escritura de Parquet
+
+En Windows, Spark necesita `winutils.exe` y `hadoop.dll` (Hadoop 3.x) para escribir
+archivos. Copiarlos en una carpeta como `C:\hadoop\bin` y definir:
+
+| Variable | Valor |
+|---|---|
+| `HADOOP_HOME` | `C:\hadoop` |
+| `PATH` | agregar `C:\hadoop\bin` |
+
+Sin esto, la ingesta falla al escribir con un error de `NativeIO` o `winutils`.
+En macOS y Linux no hace falta.
+
+### macOS
+
+Instalar JDK 17 con `brew install openjdk@17` y definir en `~/.zshrc`:
+
+```bash
+export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
 
 ## Instalación reproducible desde cero
 
@@ -132,3 +170,148 @@ Compare-Object (Get-Content data/sample/transacciones.csv) `
 # Sin salida = archivos idénticos
 Remove-Item data/sample/transacciones_copia.csv
 ```
+
+## Configuración y reglas de calidad
+
+### Estructura
+
+| Archivo | Contenido |
+|---|---|
+| `config/pipeline.json` | Catálogos, periodo válido, umbrales de calidad, particionamiento |
+| `src/config.py` | Carga la configuración (JSON + variables de entorno) y crea la `SparkSession` |
+| `src/schemas.py` | Esquemas explícitos de transacciones (CSV) y logs (JSON) |
+| `src/quality_rules.py` | Catálogo de reglas y funciones para aplicarlas, separar cuarentena y reportar |
+| `src/data_quality_report.py` | Perfil de calidad del dataset; guarda `reports/calidad_datos.json` |
+| `tests/test_quality_rules.py` | Pruebas unitarias de cada regla (pytest) |
+
+### Decisiones de diseño
+
+- **Esquemas explícitos, sin `inferSchema`**: evita una lectura extra de los datos y
+  garantiza tipos estables. `unit_price` es `Decimal(12,2)` para no acumular errores de
+  redondeo en sumas de dinero.
+- **Reglas como expresiones nativas de Spark, sin UDFs de Python**: Catalyst puede
+  optimizar el plan completo (predicate pushdown, column pruning, generación de código).
+- **Una sola pasada**: todas las reglas se evalúan juntas y sus nombres se guardan en las
+  columnas `dq_errors` y `dq_warnings`.
+- **Cuarentena en vez de descarte**: los registros con errores se conservan con el motivo
+  del rechazo y la fecha de validación, para trazabilidad.
+- **Periodo válido configurable** (`valid_from` / `valid_to`) en lugar de comparar con la
+  fecha actual: así el resultado es reproducible sin importar cuándo se ejecute.
+- **Umbral de rechazo** (`max_rejection_rate`, 15 %): si se supera, el pipeline se detiene
+  con `DataQualityError` para no publicar resultados sobre datos degradados.
+
+### Reglas implementadas
+
+Severidad `error` envía el registro a cuarentena; `warning` lo deja pasar marcado.
+
+| Regla | Fuente | Dimensión | Severidad |
+|---|---|---|---|
+| `txn_registro_corrupto` | Transacciones | Validez | error |
+| `txn_id_faltante` | Transacciones | Completitud | error |
+| `txn_id_formato_invalido` | Transacciones | Validez | error |
+| `txn_id_duplicado` | Transacciones | Unicidad | error |
+| `txn_timestamp_faltante` | Transacciones | Completitud | error |
+| `txn_timestamp_fuera_de_rango` | Transacciones | Consistencia | error |
+| `txn_tienda_faltante` / `txn_tienda_fuera_de_catalogo` | Transacciones | Completitud / Integridad | error |
+| `txn_producto_faltante` / `txn_producto_fuera_de_catalogo` | Transacciones | Completitud / Integridad | error |
+| `txn_cantidad_faltante` / `txn_cantidad_no_positiva` | Transacciones | Completitud / Validez | error |
+| `txn_precio_faltante` / `txn_precio_no_positivo` | Transacciones | Completitud / Validez | error |
+| `txn_cantidad_atipica` / `txn_precio_atipico` | Transacciones | Validez | warning |
+| `log_registro_corrupto` | Logs | Validez | error |
+| `log_event_id_faltante` / `log_event_id_duplicado` | Logs | Completitud / Unicidad | error |
+| `log_txn_id_faltante` | Logs | Completitud | error |
+| `log_tipo_evento_invalido` | Logs | Validez | error |
+| `log_transaccion_huerfana` | Logs | Integridad referencial | error |
+| `log_usuario_faltante` | Logs | Completitud | warning |
+| `log_dispositivo_invalido` | Logs | Validez | warning |
+
+Las transacciones sin log asociado no se consideran error (corresponden a ventas en POS
+físico); se reportan como métrica informativa de cobertura.
+
+### Estrategia de particionamiento
+
+Las transacciones válidas se persistirán en Parquet particionado por `year` y `month`
+(derivados de `timestamp`). Las consultas de negocio filtran por periodo, así que Spark
+lee solo las carpetas necesarias (partition pruning), y el rango de 6 meses produce
+particiones de tamaño razonable. No se particiona por `store_id` para evitar demasiados
+archivos pequeños.
+
+### Ejecutar
+
+```bash
+# Pruebas unitarias
+python -m pytest
+
+# Perfil de calidad del dataset (generarlo antes con data/generate_sample.py)
+python -m src.data_quality_report
+```
+
+Resultado con `--rows 5000 --seed 134340`:
+
+| Fuente | Registros | Rechazados | Advertencias |
+|---|---|---|---|
+| Transacciones | 5.000 | 356 (7,12 %) | 0 |
+| Logs | 4.284 | 488 (11,39 %) | 102 |
+
+Los logs huérfanos superan el 10 % inyectado porque también se marcan los logs cuya
+transacción llegó con `transaction_id` vacío: sin identificador no hay forma de enlazarlos.
+
+## Ingesta con validaciones
+
+### Modalidad elegida: batch
+
+El pipeline procesa los datos por lotes (batch) y no en streaming. Razones:
+
+- **Naturaleza de las fuentes.** Las transacciones y los logs llegan como archivos
+  completos (CSV y JSON), no como un flujo continuo de eventos.
+- **Necesidad del negocio.** El caso de DATAMARCA pide trazabilidad y reducir tiempos de
+  análisis (reportes por tienda, producto y mes), no reaccionar en segundos.
+- **Validaciones que miran el lote completo.** Unicidad de `transaction_id`, logs huérfanos
+  y el umbral de rechazo necesitan ver todos los registros; en streaming exigirían
+  estado entre micro-lotes y marcas de agua (watermarks).
+- **Costo.** Un cluster que se enciende, procesa y se apaga cuesta menos que uno encendido
+  todo el día esperando eventos.
+
+Siguiendo el modelo unificado de Apache Beam, batch es un caso particular de streaming con
+datos acotados. Las reglas son expresiones de DataFrame que Structured Streaming también
+acepta (`spark.readStream`), así que migrar implicaría cambiar la lectura y la escritura,
+agregar ventanas temporales sobre `timestamp` y un `withWatermark` para datos tardíos,
+pero no reescribir la lógica de calidad.
+
+### Flujo
+
+1. **Lectura** de ambas fuentes con esquemas explícitos.
+2. **Validación**: reglas de calidad y detección de logs huérfanos, en una sola pasada.
+   Los resultados se cachean para no releer los archivos.
+3. **Escritura de la cuarentena**, siempre, para auditoría.
+4. **Control de umbral**: si algún origen supera `max_rejection_rate`, la corrida termina
+   con estado `detenida_por_calidad` y no publica datos válidos.
+5. **Escritura de los válidos** en Parquet particionado.
+
+Cada registro escrito lleva `ingestion_run_id` e `ingested_at` para trazabilidad.
+Las escrituras usan modo `overwrite`, así que repetir la corrida da el mismo resultado
+(idempotencia). Antes de escribir se hace `repartition` por las columnas de partición
+para dejar un archivo por carpeta y evitar el problema de muchos archivos pequeños.
+
+### Salidas
+
+```
+data/output/
+├── validated/
+│   ├── transacciones/year=2025/month=10/part-....parquet   (particionado por año y mes)
+│   └── logs/event_type=purchase/part-....parquet          (particionado por tipo de evento)
+└── quarantine/
+    ├── transacciones/   (con dq_errors, dq_warnings y dq_checked_at)
+    └── logs/
+reports/ingesta_metricas.json   (tiempos por etapa, calidad y rutas de salida)
+```
+
+### Ejecutar
+
+```bash
+python -m src.ingestion
+```
+
+El comando termina con código 0 si la corrida es exitosa y 1 si se detuvo por calidad.
+Los logs muestran el inicio y fin de cada etapa con su duración.
+
