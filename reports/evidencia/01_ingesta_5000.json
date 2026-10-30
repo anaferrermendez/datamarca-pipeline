@@ -1,0 +1,211 @@
+{
+  "run_id": "20261030-083930-c5b0a2",
+  "estado": "exitosa",
+  "error": null,
+  "spark_master": "local[*]",
+  "tiempos_segundos": {
+    "lectura_y_validacion": 2.214,
+    "escritura_cuarentena": 0.607,
+    "escritura_validos": 0.504,
+    "metricas_cobertura": 0.238,
+    "total": 3.59
+  },
+  "salidas": {
+    "cuarentena_transacciones": "/Users/serch/Downloads/datamarca-pipeline/data/output/quarantine/transacciones",
+    "cuarentena_logs": "/Users/serch/Downloads/datamarca-pipeline/data/output/quarantine/logs",
+    "validos_transacciones": "/Users/serch/Downloads/datamarca-pipeline/data/output/validated/transacciones",
+    "validos_logs": "/Users/serch/Downloads/datamarca-pipeline/data/output/validated/logs"
+  },
+  "calidad": {
+    "transacciones": {
+      "total": 5000,
+      "rechazados": 356,
+      "con_advertencias": 0,
+      "tasa_rechazo": 0.0712,
+      "reglas": [
+        {
+          "regla": "txn_registro_corrupto",
+          "dimension": "validez",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_id_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 48,
+          "porcentaje": 0.96
+        },
+        {
+          "regla": "txn_id_formato_invalido",
+          "dimension": "validez",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_id_duplicado",
+          "dimension": "unicidad",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_timestamp_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_timestamp_fuera_de_rango",
+          "dimension": "consistencia",
+          "severidad": "error",
+          "violaciones": 51,
+          "porcentaje": 1.02
+        },
+        {
+          "regla": "txn_tienda_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_tienda_fuera_de_catalogo",
+          "dimension": "integridad",
+          "severidad": "error",
+          "violaciones": 51,
+          "porcentaje": 1.02
+        },
+        {
+          "regla": "txn_producto_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_producto_fuera_de_catalogo",
+          "dimension": "integridad",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_cantidad_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_cantidad_no_positiva",
+          "dimension": "validez",
+          "severidad": "error",
+          "violaciones": 99,
+          "porcentaje": 1.98
+        },
+        {
+          "regla": "txn_cantidad_atipica",
+          "dimension": "validez",
+          "severidad": "warning",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_precio_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "txn_precio_no_positivo",
+          "dimension": "validez",
+          "severidad": "error",
+          "violaciones": 107,
+          "porcentaje": 2.14
+        },
+        {
+          "regla": "txn_precio_atipico",
+          "dimension": "validez",
+          "severidad": "warning",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        }
+      ]
+    },
+    "logs": {
+      "total": 4284,
+      "rechazados": 488,
+      "con_advertencias": 102,
+      "tasa_rechazo": 0.11391223155929038,
+      "reglas": [
+        {
+          "regla": "log_registro_corrupto",
+          "dimension": "validez",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "log_event_id_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "log_event_id_duplicado",
+          "dimension": "unicidad",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "log_txn_id_faltante",
+          "dimension": "completitud",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "log_tipo_evento_invalido",
+          "dimension": "validez",
+          "severidad": "error",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "log_usuario_faltante",
+          "dimension": "completitud",
+          "severidad": "warning",
+          "violaciones": 102,
+          "porcentaje": 2.38
+        },
+        {
+          "regla": "log_dispositivo_invalido",
+          "dimension": "validez",
+          "severidad": "warning",
+          "violaciones": 0,
+          "porcentaje": 0.0
+        },
+        {
+          "regla": "log_transaccion_huerfana",
+          "dimension": "integridad",
+          "severidad": "error",
+          "violaciones": 488,
+          "porcentaje": 11.39
+        }
+      ]
+    },
+    "cobertura_logs": {
+      "transacciones_validas": 4644,
+      "con_log": 3554,
+      "sin_log": 1090,
+      "porcentaje_sin_log": 23.47
+    }
+  }
+}

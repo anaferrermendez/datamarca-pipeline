@@ -229,3 +229,6 @@ derby.log
 data/sample/*.csv
 data/sample/*.json
 data/output/
+# Reportes que se regeneran en cada corrida (las copias fijas van en reports/evidencia/)
+reports/calidad_datos.json
+reports/ingesta_metricas.json
