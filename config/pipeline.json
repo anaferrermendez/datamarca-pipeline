@@ -12,7 +12,8 @@
     "logs_file": "logs_ecommerce.json",
     "validated_subdir": "validated",
     "quarantine_subdir": "quarantine",
-    "reports_dir": "reports"
+    "reports_dir": "reports",
+    "curated_subdir": "curated"
   },
   "catalogs": {
     "store_ids": [
@@ -62,5 +63,52 @@
     "events": [
       "event_type"
     ]
+  },
+  "dimensions": {
+    "stores": {
+      "BOG-001": {
+        "city": "Bogotá",
+        "country": "Colombia"
+      },
+      "BOG-002": {
+        "city": "Bogotá",
+        "country": "Colombia"
+      },
+      "MED-001": {
+        "city": "Medellín",
+        "country": "Colombia"
+      },
+      "CAL-001": {
+        "city": "Cali",
+        "country": "Colombia"
+      },
+      "CDMX-001": {
+        "city": "Ciudad de México",
+        "country": "México"
+      },
+      "GDL-001": {
+        "city": "Guadalajara",
+        "country": "México"
+      },
+      "MTY-001": {
+        "city": "Monterrey",
+        "country": "México"
+      },
+      "LIM-001": {
+        "city": "Lima",
+        "country": "Perú"
+      },
+      "LIM-002": {
+        "city": "Lima",
+        "country": "Perú"
+      }
+    },
+    "categories": {
+      "LAC": "Lácteos",
+      "BEB": "Bebidas",
+      "ABR": "Abarrotes",
+      "LIM": "Limpieza",
+      "FRU": "Frutas y verduras"
+    }
   }
 }

@@ -36,6 +36,7 @@ class PipelineConfig:
     logs_file: str
     validated_subdir: str
     quarantine_subdir: str
+    curated_subdir: str
     reports_dir: str
     store_ids: tuple
     product_ids: tuple
@@ -48,6 +49,8 @@ class PipelineConfig:
     max_rejection_rate: float
     transactions_partition_cols: tuple
     events_partition_cols: tuple
+    store_dimension: dict
+    category_names: dict
 
     @property
     def transactions_path(self) -> str:
@@ -62,6 +65,9 @@ class PipelineConfig:
 
     def quarantine_path(self, dataset: str) -> str:
         return f"{self.output_dir.rstrip('/')}/{self.quarantine_subdir}/{dataset}"
+
+    def curated_path(self, dataset: str) -> str:
+        return f"{self.output_dir.rstrip('/')}/{self.curated_subdir}/{dataset}"
 
 
 def _resolve_path(value: str) -> str:
@@ -95,6 +101,7 @@ def load_config(config_path: str | None = None) -> PipelineConfig:
         logs_file=paths["logs_file"],
         validated_subdir=paths["validated_subdir"],
         quarantine_subdir=paths["quarantine_subdir"],
+        curated_subdir=paths["curated_subdir"],
         reports_dir=_resolve_path(paths["reports_dir"]),
         store_ids=tuple(catalogs["store_ids"]),
         product_ids=tuple(catalogs["product_ids"]),
@@ -107,6 +114,8 @@ def load_config(config_path: str | None = None) -> PipelineConfig:
         max_rejection_rate=float(quality["max_rejection_rate"]),
         transactions_partition_cols=tuple(partitioning["transactions"]),
         events_partition_cols=tuple(partitioning["events"]),
+        store_dimension=raw["dimensions"]["stores"],
+        category_names=raw["dimensions"]["categories"],
     )
 
 
