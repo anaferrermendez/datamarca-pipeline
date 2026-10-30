@@ -232,3 +232,6 @@ data/output/
 # Reportes que se regeneran en cada corrida (las copias fijas van en reports/evidencia/)
 reports/calidad_datos.json
 reports/ingesta_metricas.json
+reports/transformaciones_metricas.json
+reports/pipeline_metricas.json
+reports/plan_catalyst.txt
