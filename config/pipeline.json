@@ -1,0 +1,66 @@
+{
+  "app_name": "datamarca-pipeline",
+  "spark": {
+    "master": "local[*]",
+    "shuffle_partitions": 8,
+    "timezone": "America/Bogota"
+  },
+  "paths": {
+    "input_dir": "data/sample",
+    "output_dir": "data/output",
+    "transactions_file": "transacciones.csv",
+    "logs_file": "logs_ecommerce.json",
+    "validated_subdir": "validated",
+    "quarantine_subdir": "quarantine",
+    "reports_dir": "reports"
+  },
+  "catalogs": {
+    "store_ids": [
+      "BOG-001",
+      "BOG-002",
+      "MED-001",
+      "CAL-001",
+      "CDMX-001",
+      "GDL-001",
+      "MTY-001",
+      "LIM-001",
+      "LIM-002"
+    ],
+    "product_ids": [
+      "LAC-1001",
+      "LAC-1002",
+      "BEB-2001",
+      "BEB-2002",
+      "ABR-3001",
+      "ABR-3002",
+      "LIM-4001",
+      "FRU-5001"
+    ],
+    "event_types": [
+      "view",
+      "add_to_cart",
+      "purchase"
+    ],
+    "devices": [
+      "mobile",
+      "desktop",
+      "tablet"
+    ]
+  },
+  "quality": {
+    "valid_from": "2025-10-01 00:00:00",
+    "valid_to": "2026-03-31 23:59:59",
+    "max_quantity": 1000,
+    "max_unit_price": 100000,
+    "max_rejection_rate": 0.15
+  },
+  "partitioning": {
+    "transactions": [
+      "year",
+      "month"
+    ],
+    "events": [
+      "event_type"
+    ]
+  }
+}
