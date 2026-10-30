@@ -18,8 +18,8 @@ Unidad: 3 — Implementación de pipeline batch o streaming con Spark en entorno
 | Ingesta con validaciones |  Completado |
 | Transformaciones (SparkSQL / DataFrames) |  Completado |
 | Persistencia en Parquet particionado |  Completado |
-| Pruebas de rendimiento y estimación de costos |  Pendiente |
-| Informe técnico |  Pendiente |
+| Pruebas de rendimiento y estimación de costos |  Completado |
+| Informe técnico |  Completado (`docs/informe_tecnico.md`) |
 
 ## Requisitos del entorno
 
@@ -374,3 +374,29 @@ el embudo no refleja un recorrido real del cliente: las tasas rondan el 100 % y 
 superarlo. Con datos reales (secuencias de eventos por sesión), la misma consulta
 mostraría la caída típica de vista → carrito → compra.
 
+
+## Pruebas de rendimiento y costo
+
+```
+python -m src.benchmark                               # 5.000 / 50.000 / 250.000 filas
+python -m src.benchmark --rows 5000 500000 --nodes 3 --node-hourly-usd 0.24
+```
+
+Para cada volumen genera el dataset con semilla fija, ejecuta `python -m src.pipeline` en un proceso limpio y guarda
+`reports/benchmark_rendimiento.json` y `.md` (tiempos por etapa, filas/s y costo estimado). El costo es
+`(tiempo + arranque del cluster) x nodos x tarifa por nodo-hora`; la tarifa es un **supuesto** configurable y debe
+verificarse con la calculadora del proveedor. Resultados y análisis en `docs/informe_tecnico.md`.
+
+## Ejecución en cloud (supuestos)
+
+El código no cambia entre local y cloud; solo las variables de entorno:
+
+| Variable | Ejemplo |
+|---|---|
+| `DATAMARCA_INPUT_DIR` | `s3a://<bucket>/datamarca/raw` |
+| `DATAMARCA_OUTPUT_DIR` | `s3a://<bucket>/datamarca/out` |
+| `DATAMARCA_SPARK_MASTER` | `yarn` |
+| `DATAMARCA_SHUFFLE_PARTITIONS` | `200` |
+
+Credenciales: rol de IAM del cluster (EMR/Dataproc/HDInsight); nunca se guardan claves en el repositorio.
+Requiere el conector de almacenamiento correspondiente (`hadoop-aws` para `s3a://`).
