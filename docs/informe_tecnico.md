@@ -42,18 +42,71 @@ Spark tiene activado Adaptive Query Execution. Una conciliación compara los ing
 fallar la corrida si no coinciden.
 
 ## 6. Pruebas de rendimiento (entorno local)
-Comando: `python -m src.benchmark --rows 5000 50000 250000`. Datos: `reports/evidencia/03_benchmark_rendimiento.*`.
-**Entorno:** una máquina Linux con 1 vCPU y 3 GB de RAM en modo `local[*]`. No es un cluster; sirve para ver tendencias.
+Comando: `python -m src.benchmark --rows 5000 50000 100000 250000 500000 `. Datos: `reports/evidencia`.
 
-| Filas | Entrada (MB) | Ingesta (s) | Transformación (s) | Total (s) | Filas/s |
-|---:|---:|---:|---:|---:|---:|
-| 5.000 | 0,85 | 19,75 | 10,96 | 30,74 | 162,6 |
-| 50.000 | 8,45 | 24,66 | 11,50 | 36,20 | 1.381 |
-| 250.000 | 42,21 | 36,52 | 14,29 | 50,85 | 4.917 |
+Se realizaron pruebas de escalabilidad incrementando el volumen de transacciones desde 5.000 hasta 500.000 registros. El entorno de medición fue una máquina local con 20 vCPUs en modo `local[*]`, ejecutando el pipeline completo (ingesta, validación, transformaciones y persistencia). Los resultados se presentan en la Tabla 1.
 
-Con 10 veces más datos el tiempo crece 1,18 veces, y con 5 veces más crece 1,40 veces: el tiempo está dominado por
-costos fijos (arranque de la JVM, planificación y escritura de archivos), no por el volumen. Una corrida completa
-con 250.000 filas, con tiempos por etapa, está en `reports/evidencia/05_corrida_completa_250k.log`.
+**Tabla 1. Tiempos de ejecución y throughput por volumen de datos**
+
+| Filas | Tamaño Entrada (MB) | Ingesta (s) | Transformación (s) | Total (s) | Throughput (filas/s) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 5.000 | 0,85 | 7,12 | 33,92 | 41,05 | 121,8 |
+| 50.000 | 8,49 | 8,71 | 34,95 | 43,66 | 1.145,1 |
+| 100.000 | 16,97 | 9,40 | 35,82 | 45,23 | 2.211,1 |
+| 250.000 | 42,42 | 11,70 | 36,35 | 48,06 | 5.201,7 |
+| **500.000** | **84,82** | **11,13** | **35,89** | **47,03** | **10.630,8** |
+
+El tiempo total de ejecución se mantuvo prácticamente constante (entre 41 y 48 segundos) mientras el volumen de datos creció 100 veces (de 5k a 500k). Esto indica que el tiempo está dominado por un **overhead fijo de Apache Spark** (arranque de la JVM, inicialización del contexto y planificación de Catalyst) de aproximadamente 40 segundos, mientras que el procesamiento real de los datos agregó solo unos pocos segundos adicionales. El throughput escaló, alcanzando más de 10.000 filas por segundo en el volumen máximo. Los factores de escalamiento (1,06x al multiplicar por 10 el volumen, y 1,04x al multiplicar por 2) confirman que el pipeline no presenta cuellos de botella por volumen.
+
+### Estimación de costos en el proveedor cloud
+
+Como el pipeline se ejecutó únicamente en entorno local, el costo en la nube **no se midió: se estimó** a partir de los tiempos de la Tabla 1. La referencia es Google Cloud Serverless for Apache Spark, un servicio gestionado de Spark en el que solo se paga por los recursos consumidos durante la ejecución.
+
+**Tarifa y configuración.** La tarifa del nivel estándar es de 0,06 USD por DCU-hora en la región `us-central1`, facturada por segundo con un mínimo de un minuto. Se asume la configuración por defecto, que consume un mínimo de 12 DCU: un driver de 4 vCPU y 16 GiB (4 DCU) y dos ejecutores de 4 vCPU y 16 GiB (8 DCU en total). Es decir, 8 vCPU procesan los datos y se facturan 12 DCU. El costo por ejecución es:
+
+> costo (USD) = horas de ejecución × 12 DCU × 0,06
+
+**Supuestos.**
+
+1. **Tamaño por transacción:** 2 KB (supuesto del equipo para transacciones reales con sus logs asociados). Los datos sintéticos de las pruebas locales pesan ~0,17 KB por fila, por lo que la estimación se expresa en bytes y no en filas.
+2. **Tasa de procesamiento medida:** en la Tabla 1, procesar 84,82 MB (500.000 filas) añadió ~7 s sobre el overhead fijo, es decir, ~12 MB/s. Se asume escalamiento lineal con el volumen en bytes.
+3. **Overhead fijo:** ~40 s por ejecución, como en la Tabla 1.
+4. **Núcleos:** la máquina local usó 20 vCPU y la configuración en la nube procesa con 8, por lo que en el escenario base el tiempo de procesamiento se multiplica por 20/8 = 2,5.
+5. **Escenarios:** optimista (el procesamiento no está limitado por núcleos), base (ajuste por núcleos) y pesimista (el doble del procesamiento base, por shuffle y derrames a disco).
+
+**Caso A. Ejecución diaria incremental.** Se procesan solo las transacciones nuevas del día: 1.000.000 de filas, equivalentes a ~2 GB.
+
+**Tabla 2. Escenarios de costo para la ejecución diaria incremental (2 GB)**
+
+| Escenario | Tiempo total | Costo por ejecución | Costo mensual (30 ejecuciones) |
+| :--- | :--- | :--- | :--- |
+| Optimista | 205 s | 0,041 USD | 1,23 USD |
+| Base | 453 s | 0,091 USD | 2,72 USD |
+| Pesimista | 865 s | 0,173 USD | 5,19 USD |
+
+**Caso B. Recarga histórica completa (una sola vez).** Se procesan 50.000.000 de filas, equivalentes a ~100 GB.
+
+**Tabla 3. Escenarios de costo para la recarga completa (100 GB)**
+
+| Escenario | Tiempo total | Costo por ejecución |
+| :--- | :--- | :--- |
+| Optimista | 8.293 s (2,3 h) | 1,66 USD |
+| Base | 20.672 s (5,7 h) | 4,13 USD |
+| Pesimista | 41.303 s (11,5 h) | 8,26 USD |
+
+Ejemplo de cálculo (Caso B, escenario base): 100.000 MB / 84,82 MB × 7 s = 8.253 s de procesamiento; × 2,5 + 40 s = 20.672 s = 5,74 h; 5,74 × 12 × 0,06 = 4,13 USD.
+
+**Costos no incluidos.** El servicio factura aparte el almacenamiento de shuffle (0,000054795 USD por GiB-hora en el nivel estándar), además del almacenamiento en Cloud Storage y la salida de red. Por ejemplo, 100 GiB de shuffle durante 5,7 h costarían ~0,03 USD, y el almacenamiento de 100 GB de entrada en Cloud Storage sería del orden de unos pocos USD al mes (verificar la tarifa vigente). Estos rubros no cambian las conclusiones.
+
+**Limitaciones.**
+
+1. Las cifras son estimaciones, no mediciones en la nube.
+2. La tasa de ~12 MB/s se midió con datos sintéticos de formato simple hasta 85 MB; con JSON real de 2 KB por transacción el procesamiento por byte podría ser más lento, y el escalamiento a 100 GB podría no ser lineal (shuffle, derrames a disco).
+3. El costo real depende de la configuración de ejecutores elegida.
+
+Como trabajo futuro, una corrida en la nube permitiría reemplazar la estimación: el comando `gcloud dataproc batches describe BATCH_ID --region REGION` entrega las métricas de uso de la carga (DCU-segundos) para calcular el costo exacto.
+
+**Conclusión.** La operación diaria incremental cuesta entre 1 y 6 USD al mes, y una recarga histórica completa de 100 GB cuesta entre 2 y 8 USD por ejecución. En ambos casos el cómputo no es una barrera económica para la solución propuesta, y el costo se reduce directamente con las optimizaciones del pipeline (menos shuffle, menos particiones innecesarias, formato columnar).
 
 ## 7. Experimento de optimización
 Comando: `python -m src.experimento_optimizacion --repeticiones 3`. Cada variante se ejecuta con una acción `noop`, tras
@@ -76,44 +129,12 @@ Lectura honesta de los resultados:
   diferencia mezcla lectura y cómputo.
 - Las diferencias absolutas son de décimas de segundo; los factores son indicativos, no una garantía en producción.
 
-## 8. Elección del proveedor cloud y estimación de costo
-Se comparó Google Cloud (Managed Service for Apache Spark, modo serverless) con AWS EMR Serverless. Se eligió Google
-Cloud porque ofrece crédito inicial de USD 300 para cuentas nuevas, no requiere administrar un cluster, trae
-integración nativa con `gs://` y cobra por segundo (mínimo un minuto) solo mientras corre el trabajo. EMR Serverless es
-una alternativa equivalente en modelo de cobro (USD 0,052624 por vCPU-hora y USD 0,0057785 por GB-hora en us-east-1),
-pero sin capa gratuita específica. El detalle está en `docs/despliegue_gcp.md`.
-
-Modelo de costo: `DCU-horas consumidas × tarifa por DCU-hora`. Con una configuración de 12 DCU (un driver y dos executors
-de 4 vCPU), cada hora de ejecución cuesta unos USD 0,72 con la tarifa de referencia de USD 0,06 por DCU-hora, que debe
-verificarse en la página oficial. El consumo real en DCU lo informa Google Cloud en cada batch, y
-`scripts/gcp_resumen.py` calcula el costo exacto de cada corrida.
-
-Estimación local previa (modelo de nodos, supuesto sin verificar): 3 nodos × USD 0,24 por nodo-hora más 5 minutos de
-arranque facturados dan USD 0,066 (5.000 filas), 0,067 (50.000) y 0,070 (250.000) por corrida. El costo está
-dominado por el arranque; con el cobro por segundo de un servicio serverless, ese componente fijo es mucho menor.
-
-## 9. Ejecución en Google Cloud (a completar con la evidencia real)
-**Estado: pendiente de ejecución por el equipo.** El código de entrada cloud, los scripts y las pruebas locales con rutas
-`file://` están listos; falta correrlos con una cuenta de Google Cloud. Complete esta tabla con
-`python3 scripts/gcp_resumen.py` y adjunte las capturas descritas en `docs/despliegue_gcp.md`.
-
-| Filas | Executors | Duración total (s) | DCU-horas | Costo (USD) |
-|---:|---:|---:|---:|---:|
-| 500.000 | 2 | _pendiente_ | _pendiente_ | _pendiente_ |
-| 2.000.000 | 2 | _pendiente_ | _pendiente_ | _pendiente_ |
-| 2.000.000 | 4 | _pendiente_ | _pendiente_ | _pendiente_ |
-| 5.000.000 | 4 | _pendiente_ | _pendiente_ | _pendiente_ |
-
-Análisis a redactar tras la corrida: (a) cómo cambia el tiempo al subir el volumen, (b) el efecto de pasar de 2 a 4
-executors, (c) si la caché ayudó con lectura desde Cloud Storage, (d) el costo total frente al crédito.
-
-## 10. Control de versiones y reproducibilidad
+## 8. Control de versiones y reproducibilidad
 Commits semánticos (`feat`, `fix`, `test`, `docs`, `refactor`, `chore`), ramas `feat/*` integradas por Pull Request y
 trabajo repartido entre varios integrantes. El README documenta las variables de entorno (sin credenciales), el comando
 exacto de ejecución, los requisitos de Windows (`winutils`), el flujo de trabajo en Git y la ejecución en la nube.
 
-## 11. Limitaciones
-- Aún no hay corrida en un cluster cloud real (sección 9).
+## 9. Limitaciones
 - Persistencia en Parquet, que el enunciado permite; no se usa Delta Lake.
 - El embudo de conversión no es realista porque el generador asigna `event_type` al azar.
-- Las mediciones locales vienen de una máquina de 1 vCPU; las tarifas son de referencia y deben verificarse.
+- Las mediciones locales vienen de una máquina de 20 vCPU; las tarifas son de referencia y deben verificarse.

@@ -21,8 +21,6 @@ Unidad: 3 — Implementación de pipeline batch o streaming con Spark en entorno
 | Pruebas de rendimiento y estimación de costos |  Completado |
 | Informe técnico |  Completado (`docs/informe_tecnico.md`) |
 | Experimento de optimización (con y sin cada mejora)     | Completado |
-| Código y scripts para Google Cloud (serverless)         | Completado (probado en local) |
-| Corrida real en Google Cloud con evidencia              | Pendiente (ver `docs/despliegue_gcp.md`) |
 
 ## Requisitos del entorno
 
@@ -381,14 +379,12 @@ mostraría la caída típica de vista → carrito → compra.
 ## Pruebas de rendimiento y costo
 
 ```
-python -m src.benchmark                               # 5.000 / 50.000 / 250.000 filas
-python -m src.benchmark --rows 5000 500000 --nodes 3 --node-hourly-usd 0.24
+python -m src.benchmark                               # 5.000 / 50.000 / 100.000 / 250.000 / 500.000 filas
 ```
 
 Para cada volumen genera el dataset con semilla fija, ejecuta `python -m src.pipeline` en un proceso limpio y guarda
 `reports/benchmark_rendimiento.json` y `.md` (tiempos por etapa, filas/s y costo estimado). El costo es
-`(tiempo + arranque del cluster) x nodos x tarifa por nodo-hora`; la tarifa es un **supuesto** configurable y debe
-verificarse con la calculadora del proveedor. Resultados y análisis en `docs/informe_tecnico.md`.
+`(tiempo + arranque del cluster) x nodos x tarifa por nodo-hora`; la tarifa es un **supuesto** configurable. Resultados y análisis en `docs/informe_tecnico.md`.
 
 ## Experimento de optimización
 
@@ -412,8 +408,6 @@ bash scripts/gcp_benchmark.sh                  # varios volúmenes y número de 
 python3 scripts/gcp_resumen.py              # tiempos, DCU-horas y costo
 ```
 
-Guía completa, comparación de proveedores y evidencia a recolectar: [`docs/despliegue_gcp.md`](docs/despliegue_gcp.md).
-
 | Variable | Ejemplo | Quién la define |
 |---|---|---|
 | `DATAMARCA_INPUT_DIR` | `gs://<bucket>/raw/500000` | `cloud_entry.py` (`--input-dir`) |
@@ -424,7 +418,7 @@ Guía completa, comparación de proveedores y evidencia a recolectar: [`docs/des
 | `DATAMARCA_SHUFFLE_PARTITIONS` | `64` | `cloud_entry.py` (`--shuffle-partitions`) |
 
 Credenciales: se usan la cuenta de Google Cloud de quien ejecuta (Cloud Shell) y la cuenta de servicio del proyecto.
-No hay claves ni tokens en el repositorio. Para AWS (EMR Serverless) basta apuntar a `s3a://` con un rol de IAM.
+No hay claves ni tokens en el repositorio.
 
 ## Flujo de trabajo en Git
 
