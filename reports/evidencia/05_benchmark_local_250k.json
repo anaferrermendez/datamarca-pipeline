@@ -1,0 +1,41 @@
+{
+  "supuestos": {
+    "entorno_medicion": "20 vCPU, local[*]",
+    "nodos": 3,
+    "tarifa_nodo_hora_usd": 0.24,
+    "arranque_cluster_s": 300,
+    "semilla": 134340
+  },
+  "corridas": [
+    {
+      "filas_transacciones": 250000,
+      "tamano_entrada_mb": 42.42,
+      "tamano_salida_mb": 7.65,
+      "exit_code": 0,
+      "estado": "exitosa",
+      "tiempo_ingesta_s": 11.704,
+      "tiempo_transformacion_s": 36.349,
+      "tiempo_total_pipeline_s": 48.061,
+      "tiempo_proceso_completo_s": 52.509,
+      "throughput_filas_por_s": 5201.7,
+      "detalle_etapas": {
+        "ingesta": {
+          "lectura_y_validacion": 7.048,
+          "escritura_cuarentena": 1.776,
+          "escritura_validos": 1.931,
+          "metricas_cobertura": 0.892,
+          "total": 11.704
+        },
+        "transformaciones": {
+          "lectura_y_enriquecimiento": 32.013,
+          "agregacion_y_escritura": 3.835,
+          "conciliacion": 0.244,
+          "planes_catalyst": 0.066,
+          "total": 36.349
+        }
+      },
+      "costo_estimado_usd": 0.069612
+    }
+  ],
+  "escalamiento": []
+}

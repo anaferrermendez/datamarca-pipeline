@@ -1,0 +1,112 @@
+{
+  "supuestos": {
+    "entorno_medicion": "20 vCPU, local[*]",
+    "nodos": 3,
+    "tarifa_nodo_hora_usd": 0.24,
+    "arranque_cluster_s": 300,
+    "semilla": 134340
+  },
+  "corridas": [
+    {
+      "filas_transacciones": 5000,
+      "tamano_entrada_mb": 0.85,
+      "tamano_salida_mb": 0.24,
+      "exit_code": 0,
+      "estado": "exitosa",
+      "tiempo_ingesta_s": 7.123,
+      "tiempo_transformacion_s": 33.917,
+      "tiempo_total_pipeline_s": 41.047,
+      "tiempo_proceso_completo_s": 46.518,
+      "throughput_filas_por_s": 121.8,
+      "detalle_etapas": {
+        "ingesta": {
+          "lectura_y_validacion": 3.977,
+          "escritura_cuarentena": 1.175,
+          "escritura_validos": 1.546,
+          "metricas_cobertura": 0.368,
+          "total": 7.123
+        },
+        "transformaciones": {
+          "lectura_y_enriquecimiento": 30.083,
+          "agregacion_y_escritura": 3.302,
+          "conciliacion": 0.279,
+          "planes_catalyst": 0.065,
+          "total": 33.917
+        }
+      },
+      "costo_estimado_usd": 0.068209
+    },
+    {
+      "filas_transacciones": 50000,
+      "tamano_entrada_mb": 8.49,
+      "tamano_salida_mb": 1.65,
+      "exit_code": 0,
+      "estado": "exitosa",
+      "tiempo_ingesta_s": 8.707,
+      "tiempo_transformacion_s": 34.947,
+      "tiempo_total_pipeline_s": 43.663,
+      "tiempo_proceso_completo_s": 48.872,
+      "throughput_filas_por_s": 1145.1,
+      "detalle_etapas": {
+        "ingesta": {
+          "lectura_y_validacion": 4.876,
+          "escritura_cuarentena": 1.421,
+          "escritura_validos": 1.926,
+          "metricas_cobertura": 0.442,
+          "total": 8.707
+        },
+        "transformaciones": {
+          "lectura_y_enriquecimiento": 30.905,
+          "agregacion_y_escritura": 3.54,
+          "conciliacion": 0.241,
+          "planes_catalyst": 0.064,
+          "total": 34.947
+        }
+      },
+      "costo_estimado_usd": 0.068733
+    },
+    {
+      "filas_transacciones": 100000,
+      "tamano_entrada_mb": 16.97,
+      "tamano_salida_mb": 3.16,
+      "exit_code": 0,
+      "estado": "exitosa",
+      "tiempo_ingesta_s": 9.399,
+      "tiempo_transformacion_s": 35.819,
+      "tiempo_total_pipeline_s": 45.227,
+      "tiempo_proceso_completo_s": 50.465,
+      "throughput_filas_por_s": 2211.1,
+      "detalle_etapas": {
+        "ingesta": {
+          "lectura_y_validacion": 5.229,
+          "escritura_cuarentena": 1.627,
+          "escritura_validos": 1.858,
+          "metricas_cobertura": 0.63,
+          "total": 9.399
+        },
+        "transformaciones": {
+          "lectura_y_enriquecimiento": 31.812,
+          "agregacion_y_escritura": 3.52,
+          "conciliacion": 0.222,
+          "planes_catalyst": 0.075,
+          "total": 35.819
+        }
+      },
+      "costo_estimado_usd": 0.069045
+    }
+  ],
+  "escalamiento": [
+    {
+      "de_filas": 5000,
+      "a_filas": 50000,
+      "factor_volumen": 10.0,
+      "factor_tiempo": 1.06
+    },
+    {
+      "de_filas": 50000,
+      "a_filas": 100000,
+      "factor_volumen": 2.0,
+      "factor_tiempo": 1.04
+    }
+  ]
+}
