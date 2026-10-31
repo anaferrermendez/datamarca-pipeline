@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from src import ingestion, transformations
+from src.cloud_utils import publish_reports
 from src.config import create_spark_session, load_config
 
 logger = logging.getLogger("datamarca.pipeline")
@@ -58,6 +59,7 @@ def main() -> int:
                 print(f"  {phase:<17}{stage:<28}{seconds:>8.3f}")
         print(f"  {'TOTAL':<45}{summary['tiempo_total_segundos']:>8.3f}")
         print(f"Estado: {summary.get('estado', 'fallida')} | métricas en {path}")
+        publish_reports(spark, config.reports_dir)
         spark.stop()
 
 
