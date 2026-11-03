@@ -1,53 +1,105 @@
 from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.utils.trigger_rule import TriggerRule
 
-# 1. Argumentos por defecto (Políticas de reintento y backoff exponencial)
+# 1. CALLBACKS: Logging y auditoría
+def on_failure_callback(context):
+    """Se ejecuta cuando una tarea falla. Deja traza para el logging."""
+    ti = context["task_instance"]
+    print("=" * 60)
+    print(f"TAREA FALLIDA: {ti.task_id}")
+    print(f"   Run ID: {context['run_id']}")
+    print(f"   Intento: {ti.try_number} de {ti.max_tries}")
+    print(f"   Log: {ti.log_url}")
+    print("=" * 60)
+
+def on_retry_callback(context):
+    """Se ejecuta en cada reintento (demuestra el backoff exponencial)."""
+    ti = context["task_instance"]
+    print(f"REINTENTO {ti.try_number}/{ti.max_tries} para: {ti.task_id}")
+
+def notificar_resultado(**context):
+    """Notificación final del pipeline."""
+    print(f"Pipeline DATAMARCA finalizado. Run ID: {context['run_id']}")
+
+# 2. ARGUMENTOS POR DEFECTO (Retries y Backoff)
 default_args = {
-    'owner': 'datamarca-team',
-    'depends_on_past': False,
-    'email_on_failure': False, 
-    'email_on_retry': False,
-    'retries': 3, # 3 intentos en caso de fallo
-    # Backoff exponencial: 1 min, 2 min, 4 min...
-    'retry_delay': timedelta(minutes=1),
-    'retry_exponential_backoff': True, 
-    'max_retry_delay': timedelta(minutes=10),
-    'execution_timeout': timedelta(minutes=30), # Timeout por tarea
+    "owner": "datamarca-team",
+    "depends_on_past": False,
+    "email_on_failure": False,
+    "retries": 3,                            # 3 intentos
+    "retry_delay": timedelta(minutes=1),     # Espera 1 min
+    "retry_exponential_backoff": True,       # 1min -> 2min -> 4min
+    "max_retry_delay": timedelta(minutes=10),
+    "execution_timeout": timedelta(minutes=30),
+    "on_failure_callback": on_failure_callback,
+    "on_retry_callback": on_retry_callback,
 }
 
+# 3. DEFINICIÓN DEL DAG
 with DAG(
-    'datamarca_pipeline_orquestado',
+    dag_id="datamarca_pipeline_orquestado",
     default_args=default_args,
-    description='Orquestación del pipeline de DATAMARCA (U3)',
-    schedule='@daily', # Se ejecuta diariamente
-    start_date=datetime(2026, 10, 1),
+    description="Pipeline batch de DATAMARCA (Ingesta -> Notificación)",
+    schedule="@daily",
+    start_date=datetime(2026, 11, 3),
     catchup=False,
-    tags=['datamarca', 'spark', 'batch'],
+    tags=["datamarca", "spark", "u4"],
 ) as dag:
 
-    # Tarea 0: Inicio
-    inicio = EmptyOperator(task_id='inicio')
+    inicio = EmptyOperator(task_id="inicio")
 
-    # Tarea 1: Ingesta y Validación
+    # Etapa 1: Ingesta y validación inicial
     ingesta = BashOperator(
-        task_id='ingesta_y_validacion',
-        # La ruta /opt/airflow/datamarca viene del volumen en docker-compose.yaml
-        bash_command='cd /opt/airflow/datamarca && python -m src.ingestion',
+        task_id="ingesta",
+        bash_command="cd /opt/airflow/datamarca && python -m src.ingestion",
     )
 
-    # Tarea 2: Transformaciones y Persistencia
+    # Etapa 2: Validación (reporte de calidad sin escribir datos)
+    validacion = BashOperator(
+        task_id="validacion",
+        bash_command="cd /opt/airflow/datamarca && python -m src.data_quality_report",
+    )
+
+    # Etapa 3: Transformaciones (Fallo simulado de API externa)
     transformacion = BashOperator(
-        task_id='transformaciones_y_persistencia',
-        bash_command='cd /opt/airflow/datamarca && python -m src.transformations',
+        task_id="transformacion",
+        bash_command="cd /opt/airflow/datamarca && python -c \"raise Exception('Timeout de conexión con la API de validación de fraude')\"",
     )
 
-    # Tarea 3: Notificación
-    notificacion = BashOperator(
-        task_id='notificacion',
-        bash_command='echo "Pipeline de DATAMARCA completado exitosamente"',
+    # Etapa 4: Persistencia (verifica que las tablas se escribieron)
+    persistencia = BashOperator(
+        task_id="persistencia",
+        bash_command="cd /opt/airflow/datamarca && test -d data/output/curated/ventas_tienda_mes && echo 'Tablas curadas OK'",
     )
 
-    # Grafo de dependencias
-    inicio >> ingesta >> transformacion >> notificacion
+    # Etapa 5: Notificación
+    notificacion = PythonOperator(
+        task_id="notificacion",
+        python_callable=notificar_resultado,
+    )
+
+    # Alerta: Solo se dispara si algo falló antes
+    alerta_fallo = BashOperator(
+        task_id="alerta_fallo",
+        bash_command='echo "ALERTA: El pipeline falló. Revisar logs."',
+        trigger_rule=TriggerRule.ONE_FAILED,
+    )
+
+    # Cierre: Se ejecuta SIEMPRE (haya fallado o no)
+    fin = EmptyOperator(
+        task_id="fin",
+        trigger_rule=TriggerRule.ALL_DONE,
+    )
+
+    # 4. GRAFO DE DEPENDENCIAS
+    inicio >> ingesta >> validacion >> transformacion >> persistencia >> notificacion
+    notificacion >> fin
+    
+    # Si cualquiera de las etapas falla, se dispara la alerta
+    [ingesta, validacion, transformacion, persistencia] >> alerta_fallo
+    alerta_fallo >> fin
