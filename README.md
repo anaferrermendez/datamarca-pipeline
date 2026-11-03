@@ -428,3 +428,13 @@ No hay claves ni tokens en el repositorio.
   `feat(ingesta): agregar cuarentena`.
 - Antes de abrir el PR: `python -m pytest` debe pasar.
 - Quien no tenga permisos de escritura trabaja desde un fork y abre el PR hacia este repositorio.
+
+---
+
+## Unidad 4: Orquestación con Apache Airflow
+
+El proyecto incluye una capa de orquestación implementada con **Apache Airflow** y desplegada localmente con **Docker**. Esta capa automatiza el pipeline de la Unidad 3 (ingesta, validación, transformación, persistencia y notificación) y añade manejo de errores con backoff exponencial, alertas automáticas y logging detallado.
+
+Para consultar la documentación técnica completa (justificación de Airflow vs Step Functions, arquitectura del DAG, políticas de reintento y evidencia del fallo controlado), dirígete al siguiente enlace:
+
+**[Documentación de Orquestación (airflow/README.md)](airflow/README.md)**
