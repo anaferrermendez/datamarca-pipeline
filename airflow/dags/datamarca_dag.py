@@ -65,10 +65,10 @@ with DAG(
         bash_command="cd /opt/airflow/datamarca && python -m src.data_quality_report",
     )
 
-    # Etapa 3: Transformaciones (Fallo simulado de API externa)
+    # Etapa 3: Transformaciones
     transformacion = BashOperator(
         task_id="transformacion",
-        bash_command="cd /opt/airflow/datamarca && python -c \"raise Exception('Timeout de conexión con la API de validación de fraude')\"",
+        bash_command="cd /opt/airflow/datamarca && python -m src.transformations",
     )
 
     # Etapa 4: Persistencia (verifica que las tablas se escribieron)
