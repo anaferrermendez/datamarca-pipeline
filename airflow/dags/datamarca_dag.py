@@ -5,6 +5,7 @@ from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.exceptions import AirflowException
 
 # 1. CALLBACKS: Logging y auditoría
 def on_failure_callback(context):
@@ -25,6 +26,19 @@ def on_retry_callback(context):
 def notificar_resultado(**context):
     """Notificación final del pipeline."""
     print(f"Pipeline DATAMARCA finalizado. Run ID: {context['run_id']}")
+
+def verificar_estado_final(**context):
+    """Falla intencionalmente si alguna tarea anterior falló, para que el DagRun marque 'failed'."""
+    dag_run = context["dag_run"]
+    tareas_fallidas = [
+        ti.task_id for ti in dag_run.get_task_instances()
+        if ti.state == "failed"
+    ]
+    if tareas_fallidas:
+        raise AirflowException(
+            f"El pipeline falló en las tareas: {', '.join(tareas_fallidas)}"
+        )
+    print("Todas las tareas completaron exitosamente.")
 
 # 2. ARGUMENTOS POR DEFECTO (Retries y Backoff)
 default_args = {
@@ -65,10 +79,10 @@ with DAG(
         bash_command="cd /opt/airflow/datamarca && python -m src.data_quality_report",
     )
 
-    # Etapa 3: Transformaciones
+    # Etapa 3: Transformaciones (Fallo simulado de API externa)
     transformacion = BashOperator(
         task_id="transformacion",
-        bash_command="cd /opt/airflow/datamarca && python -m src.transformations",
+        bash_command="cd /opt/airflow/datamarca && python -c \"raise Exception('Timeout de conexión con la API de validación de fraude')\"",
     )
 
     # Etapa 4: Persistencia (verifica que las tablas se escribieron)
@@ -88,12 +102,15 @@ with DAG(
         task_id="alerta_fallo",
         bash_command='echo "ALERTA: El pipeline falló. Revisar logs."',
         trigger_rule=TriggerRule.ONE_FAILED,
+        retries=0,
     )
 
-    # Cierre: Se ejecuta SIEMPRE (haya fallado o no)
-    fin = EmptyOperator(
+    # Cierre: Se ejecuta SIEMPRE, pero falla si hubo errores aguas arriba
+    fin = PythonOperator(
         task_id="fin",
+        python_callable=verificar_estado_final,
         trigger_rule=TriggerRule.ALL_DONE,
+        retries=0,
     )
 
     # 4. GRAFO DE DEPENDENCIAS
