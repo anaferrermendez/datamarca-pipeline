@@ -5,16 +5,18 @@ from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.exceptions import AirflowException
+from airflow.sdk.execution_time.task_runner import RuntimeTaskInstance
+from airflow.utils.state import DagRunState
 
 # 1. CALLBACKS: Logging y auditoría
 def on_failure_callback(context):
-    """Se ejecuta cuando una tarea falla. Deja traza para el logging."""
-    ti = context["task_instance"]
+    """Se ejecuta cuando una tarea falla."""
+    ti = context["ti"]
     print("=" * 60)
     print(f"TAREA FALLIDA: {ti.task_id}")
     print(f"   Run ID: {context['run_id']}")
     print(f"   Intento: {ti.try_number} de {ti.max_tries}")
-    print(f"   Log: {ti.log_url}")
     print("=" * 60)
 
 def on_retry_callback(context):
@@ -25,6 +27,17 @@ def on_retry_callback(context):
 def notificar_resultado(**context):
     """Notificación final del pipeline."""
     print(f"Pipeline DATAMARCA finalizado. Run ID: {context['run_id']}")
+
+def verificar_estado_final(**context):
+    """Falla si el DagRun no terminó en éxito, para que el estado global sea 'failed'."""
+    ti = context["ti"]
+    dag_run_state = RuntimeTaskInstance.get_dagrun_state(ti.dag_id, ti.run_id)
+    
+    if dag_run_state == DagRunState.FAILED:
+        raise AirflowException(
+            "El DagRun se marcó como 'failed' debido a fallos en tareas anteriores."
+        )
+    print(" El DagRun terminó exitosamente.")
 
 # 2. ARGUMENTOS POR DEFECTO (Retries y Backoff)
 default_args = {
@@ -65,7 +78,7 @@ with DAG(
         bash_command="cd /opt/airflow/datamarca && python -m src.data_quality_report",
     )
 
-    # Etapa 3: Transformaciones
+    # Etapa 3: Transformaciones (Fallo simulado de API externa)
     transformacion = BashOperator(
         task_id="transformacion",
         bash_command="cd /opt/airflow/datamarca && python -m src.transformations",
@@ -88,18 +101,23 @@ with DAG(
         task_id="alerta_fallo",
         bash_command='echo "ALERTA: El pipeline falló. Revisar logs."',
         trigger_rule=TriggerRule.ONE_FAILED,
+        retries=0,
     )
 
-    # Cierre: Se ejecuta SIEMPRE (haya fallado o no)
-    fin = EmptyOperator(
+    # Cierre: Se ejecuta SIEMPRE, pero falla si hubo errores aguas arriba
+    fin = PythonOperator(
         task_id="fin",
+        python_callable=verificar_estado_final,
         trigger_rule=TriggerRule.ALL_DONE,
+        retries=0,
     )
 
     # 4. GRAFO DE DEPENDENCIAS
+    # Flujo principal
     inicio >> ingesta >> validacion >> transformacion >> persistencia >> notificacion
-    notificacion >> fin
     
-    # Si cualquiera de las etapas falla, se dispara la alerta
+    # La alerta se dispara si algo falla en el camino
     [ingesta, validacion, transformacion, persistencia] >> alerta_fallo
-    alerta_fallo >> fin
+    
+    # El fin depende SOLO de la última tarea exitosa, no de la alerta
+    notificacion >> fin
