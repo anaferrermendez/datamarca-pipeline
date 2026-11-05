@@ -4,7 +4,7 @@ Este módulo implementa la capa de orquestación para el pipeline de datos de DA
 
 ## 1. Justificación técnica: Airflow vs. AWS Step Functions
 
-*   **Arquitectura de Airflow:** Requiere gestionar cuatro componentes principales: el Scheduler (decide qué ejecutar), el Executor (gestiona dónde ejecutar), los Workers (ejecutan las tareas) y el Metastore (base de datos PostgreSQL que guarda el estado). Esto implica una carga operativa alta, ya que el equipo debe monitorear los servicios.
+*   Arquitectura de Airflow: Requiere gestionar cuatro componentes principales: el Scheduler (decide qué ejecutar), el Executor (gestiona dónde ejecutar), los Workers (ejecutan las tareas) y el Metastore (base de datos PostgreSQL que guarda el estado). Esto implica una carga operativa alta, ya que el equipo debe monitorear los servicios.
 *   Arquitectura de Step Functions: Es un servicio serverless de AWS basado en máquinas de estado. Elimina completamente la carga operativa, ya que AWS gestiona el escalado, la disponibilidad y los reintentos.
 
 Decisión para DATAMARCA: Se eligió Apache Airflow por tres razones:
@@ -42,24 +42,31 @@ Como el pipeline depende de fuentes externas (POS, e-commerce, APIs de fraude), 
 
 ## 4. Manejo de errores y Logging
 
-*   Callbacks: Se definieron funciones `on_failure_callback` y `on_retry_callback` que imprimen en los logs el `task_id`, el número de intento y la URL del log completo, garantizando que cualquier error quede auditado.
-*   Estados controlados: La tarea `alerta_fallo` solo se dispara ante fallos. La tarea `fin` se ejecuta siempre, garantizando que el flujo cierre limpiamente aunque haya errores.
+*   Callbacks: Se definieron funciones `on_failure_callback` y `on_retry_callback` que imprimen en los logs el `task_id`, el número de intento y el estado del DAG.
+*   Estado global del DAG (`fin`): Por defecto, en Airflow, un nodo de cierre con `TriggerRule.ALL_DONE` termina en `success` incluso si hubo fallos aguas arriba. Para evitar este "falso positivo", el nodo `fin` se implementó como un `PythonOperator` que consulta el estado del DagRun mediante la nueva API de Airflow 3 (`RuntimeTaskInstance.get_dagrun_state`). Si detecta que el DAG falló, lanza una excepción para que el estado global se marque correctamente como `failed`.
+*   Cero reintentos en cierre y alertas: Tanto `fin` como `alerta_fallo` tienen `retries=0`. No tiene sentido reintentar una tarea de notificación o de validación de estado; si el estado es malo, lo será siempre y reintentar solo retrasaría el fallo 7 minutos innecesariamente.
 
 ### 4.1 Evidencia de fallo controlado
 
 Para demostrar la resiliencia del DAG, se forzó un fallo en la tarea intermedia `transformacion`, simulando un Timeout ficticio de conexión con la API externa de validación de fraude.
 
-Resultados observados en la ejecución:
+**Resultados observados en la ejecución:**
 *   `ingesta` y `validacion` completaron exitosamente (verde).
 *   `transformacion` falló con la excepción controlada (rojo).
 *   `persistencia` y `notificacion` se cancelaron automáticamente (`upstream_failed`), demostrando que el error no se propaga silenciosamente.
 *   `alerta_fallo` se disparó correctamente (verde).
-*   `fin` cerró el flujo (verde).
+*   `fin` se marcó en rojo (failed), garantizando que la corrida completa refleje el error.
+*   El estado global del DagRun se marcó como `failed`.
 **Evidencia gráfica del fallo:**
 
 ![Vista del grafo con el fallo controlado](../docs/evidencia_u4/graph_dag_fail.png)
 
 *Figura 2: Vista "Graph" del DAG mostrando la propagación controlada del error (persistencia y notificación en estado `upstream_failed`).*
+
+**Log de la excepción:**
+
+![Log del fallo en la tarea](../docs/evidencia_u4/log_task_fail.png)
+*Figura 3: Traza del log..*
 
 Nota: Las capturas de pantalla de esta evidencia se encuentran en `docs/evidencia_u4/`.
 
