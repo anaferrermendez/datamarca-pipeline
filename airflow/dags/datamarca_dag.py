@@ -6,16 +6,17 @@ from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.exceptions import AirflowException
+from airflow.sdk.execution_time.task_runner import RuntimeTaskInstance
+from airflow.utils.state import DagRunState
 
 # 1. CALLBACKS: Logging y auditoría
 def on_failure_callback(context):
-    """Se ejecuta cuando una tarea falla. Deja traza para el logging."""
-    ti = context["task_instance"]
+    """Se ejecuta cuando una tarea falla."""
+    ti = context["ti"]
     print("=" * 60)
     print(f"TAREA FALLIDA: {ti.task_id}")
     print(f"   Run ID: {context['run_id']}")
     print(f"   Intento: {ti.try_number} de {ti.max_tries}")
-    print(f"   Log: {ti.log_url}")
     print("=" * 60)
 
 def on_retry_callback(context):
@@ -28,17 +29,15 @@ def notificar_resultado(**context):
     print(f"Pipeline DATAMARCA finalizado. Run ID: {context['run_id']}")
 
 def verificar_estado_final(**context):
-    """Falla intencionalmente si alguna tarea anterior falló, para que el DagRun marque 'failed'."""
-    dag_run = context["dag_run"]
-    tareas_fallidas = [
-        ti.task_id for ti in dag_run.get_task_instances()
-        if ti.state == "failed"
-    ]
-    if tareas_fallidas:
+    """Falla si el DagRun no terminó en éxito, para que el estado global sea 'failed'."""
+    ti = context["ti"]
+    dag_run_state = RuntimeTaskInstance.get_dagrun_state(ti.dag_id, ti.run_id)
+    
+    if dag_run_state == DagRunState.FAILED:
         raise AirflowException(
-            f"El pipeline falló en las tareas: {', '.join(tareas_fallidas)}"
+            "El DagRun se marcó como 'failed' debido a fallos en tareas anteriores."
         )
-    print("Todas las tareas completaron exitosamente.")
+    print(" El DagRun terminó exitosamente.")
 
 # 2. ARGUMENTOS POR DEFECTO (Retries y Backoff)
 default_args = {
@@ -82,7 +81,7 @@ with DAG(
     # Etapa 3: Transformaciones (Fallo simulado de API externa)
     transformacion = BashOperator(
         task_id="transformacion",
-        bash_command="cd /opt/airflow/datamarca && python -c \"raise Exception('Timeout de conexión con la API de validación de fraude')\"",
+        bash_command="cd /opt/airflow/datamarca && python -m src.transformations",
     )
 
     # Etapa 4: Persistencia (verifica que las tablas se escribieron)
@@ -114,9 +113,11 @@ with DAG(
     )
 
     # 4. GRAFO DE DEPENDENCIAS
+    # Flujo principal
     inicio >> ingesta >> validacion >> transformacion >> persistencia >> notificacion
-    notificacion >> fin
     
-    # Si cualquiera de las etapas falla, se dispara la alerta
+    # La alerta se dispara si algo falla en el camino
     [ingesta, validacion, transformacion, persistencia] >> alerta_fallo
-    alerta_fallo >> fin
+    
+    # El fin depende SOLO de la última tarea exitosa, no de la alerta
+    notificacion >> fin
